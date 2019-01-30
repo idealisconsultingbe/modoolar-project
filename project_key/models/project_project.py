@@ -15,7 +15,7 @@ class Project(models.Model):
     )
 
     key = fields.Char(
-        string='key',
+        string='Key',
         size=10,
         required=False,
         index=True,
@@ -38,7 +38,10 @@ class Project(models.Model):
     @api.model
     def create(self, vals):
         if 'key' not in vals:
-            vals['key'] = self.generate_project_key(vals['name'])
+            if vals['name']:
+                vals['key'] = self.generate_project_key(vals['name'])
+            else:
+                vals['key'] = ''
 
         new_project = super(Project, self).create(vals)
         new_project.create_sequence()
@@ -128,7 +131,11 @@ class Project(models.Model):
         return values
 
     def get_next_task_key(self):
-        return self.sudo().task_key_sequence_id.next_by_id()
+        key = self.sudo().task_key_sequence_id.next_by_id()
+        tasks = self.env['project.task'].search([('key', '=', key)])
+        if not tasks:
+            return key
+        return self.get_next_task_key()
 
     def get_task_key_sequence(self):
         return self.sudo().task_key_sequence_id.number_next_actual
@@ -139,15 +146,27 @@ class Project(models.Model):
     def generate_project_key(self, text):
         if not text:
             return ''
-
-        data = text.split(' ')
+        data = text.strip().split(' ')
         if len(data) == 1:
-            return data[0][:3].upper()
+            key = data[0][:3].upper()
+        else:
+            key = []
+            for item in data:
+                if item and item[0].isalnum():
+                    key.append(item[0].upper())
+            key = "".join(key)
+        i = 2
+        base_key = key
+        while self._check_key_exists(key):
+            key = '%s%s' % (base_key, i)
+            i += 1
+        return key
 
-        key = []
-        for item in data:
-            key.append(item[0].upper())
-        return "".join(key)
+    def _check_key_exists(self, key):
+        projects = self.with_context(active_test=False).search([
+            ('key', '=', key)
+        ])
+        return bool(projects)
 
     @api.multi
     def _update_task_keys(self):

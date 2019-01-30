@@ -11,7 +11,7 @@ class Task(models.Model):
     _inherit = 'project.task'
 
     key = fields.Char(
-        string='key',
+        string='Key',
         size=20,
         required=False,
         index=True,
